@@ -1,8 +1,8 @@
 # JSConvert
 A utility for transpiling Javascript(ES6) source code to Python and other languages.
-
- 
-
+<br>
+<br>
+<br>
 # Overview
 JSConvert provides a framework for transpiling Javascript (ES6) source code to Python and other programming languages.  The framework is written 100% in Python 3 and can be easily extended using “Code Rule” objects. Rule modules make it easy to test and modify existing rules or create new ones.  Reference modules for transpiling to Python and Javascript are included. 
 
