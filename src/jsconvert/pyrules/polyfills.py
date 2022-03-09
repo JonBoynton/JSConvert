@@ -139,7 +139,7 @@ class CharCodeFill(CodeRule):
         sb = b.get_sub_buffer(b.current())
         sb.entries = sb.entries[2:sb.size-1]
         sb.size -= 3
-        b.add("["+"".join(sb.convert()).rstrip()+"]")
+        b.add("["+"".join(sb.transpile()).rstrip()+"]")
         return  offset
 
     
@@ -168,7 +168,7 @@ class CharAtFill(CodeRule):
         sb.size -= 3
         
         b.buf.pop()
-        b.add("["+"".join(sb.convert()).rstrip()+"]")
+        b.add("["+"".join(sb.transpile()).rstrip()+"]")
         b.add(b.current(offset).extended and "." or " ")
         return offset+1
               
@@ -203,7 +203,7 @@ class SwitchFill(CodeRule):
         b.new_line()
         v = "_switch_"+str(b.offset)
         b.add(v)
-        b.add(" = " + "".join(ex.convert()))
+        b.add(" = " + "".join(ex.transpile()))
         b.new_line()
         b.add("while True")
 
@@ -231,9 +231,9 @@ class CaseFill(CodeRule):
             sb.size -= 1 
                    
             if falls:
-                b.add("if "+key+" == "+"".join(sb.convert()).rstrip()+" or "+key+" == None:")
+                b.add("if "+key+" == "+"".join(sb.transpile()).rstrip()+" or "+key+" == None:")
             else:
-                b.add("if "+key+ " == "+"".join(sb.convert()).rstrip()+":")
+                b.add("if "+key+ " == "+"".join(sb.transpile()).rstrip()+":")
         
         else:
             b.add("else:")

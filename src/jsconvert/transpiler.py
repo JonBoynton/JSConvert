@@ -246,8 +246,11 @@ class CodeBuffer():
     def transpile(self):
         """Fully processes the un-translated components and returns the result as a list of strings."""
         
-        while self.offset < self.size:
-            self.bucket.process(self)
+    #    try:
+    while self.offset < self.size:
+        self.bucket.process(self)
+    #    except Exception as err:
+    #        print("trap Exception: "+ str(err))
       
         return self.buf
     

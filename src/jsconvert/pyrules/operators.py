@@ -37,7 +37,7 @@ __all__ = ["NotOp", "TildaOp", "OrBool", "AndBool", "EqOp",
 
 def _parse_var_name(e):
     nm = e.get_full_name()
-    if nm.startwith("this") and (len(nm) == 4 or nm[4] == "."):
+    if nm.startswith("this") and (len(nm) == 4 or nm[4] == "."):
         return "self"+nm[4:]
     
     return nm
