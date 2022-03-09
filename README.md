@@ -19,7 +19,7 @@ To convert Javascript to Python, use one of two functions in the transpilier mod
 
 **Example 1:**
 
-```js
+```py
 import jsconvert.transpiler as trans
 
 trans.convert("C:/myUserPath/some_file.js")
@@ -34,7 +34,7 @@ By default, a transpilied output *.py file with the same name and directory as t
 
 **Example 2:**
 
-```js
+```py
 import jsconvert.transpiler as trans
 
 print(trans.to_src_string("var someJSvar = 'some value';"))
