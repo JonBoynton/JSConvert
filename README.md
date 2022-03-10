@@ -44,7 +44,7 @@ print(trans.to_src_string("var someJSvar = 'some value';"))
 - rules = name of rule module used for transpiling. Default is "jsconvert.pyrules"
 
 # How to extend
-JSConvert currently includes two reference modules: “jsconvert.jsrules” and “jsconvert.pyrules”. As their names imply, jsrules are used to convert JS to JS while pyrules convert JS to Python3. A rule module can be specified by the “rule” keyword argument passed into either the convert() or to_src_string() functions as described above. 
+JSConvert currently includes two reference modules: “jsconvert.jsrules” and “jsconvert.pyrules”. As their names imply, jsrules are used to convert JS to JS while pyrules convert JS to Python3. A rule module can be specified by the “rules” keyword argument passed into either the convert() or to_src_string() functions as described above. 
 
 Each rule module contains a set of classes that extend “jsconvert.transpiler.CodeRule”. Developers that wish to modify source output can do so by modifying rule classes, adding rules, or changing rule precedence. In addition, developers can create their own rule modules to transpile JS to other languages or versions. For details and examples, see API documentation.
 
