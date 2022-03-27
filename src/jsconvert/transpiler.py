@@ -247,8 +247,8 @@ class CodeBuffer():
         """Fully processes the un-translated components and returns the result as a list of strings."""
         
     #    try:
-    while self.offset < self.size:
-        self.bucket.process(self)
+        while self.offset < self.size:
+            self.bucket.process(self)
     #    except Exception as err:
     #        print("trap Exception: "+ str(err))
       
