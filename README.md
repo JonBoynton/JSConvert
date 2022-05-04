@@ -8,7 +8,7 @@ JSConvert provides a framework for transpiling Javascript (ES6) source code to P
 
 # Why use JSConvert?
 
-If you need to release your source code in another language, you need a Transpiler. The goal of JSConvert is preserve as much of the authors original design intent as possible while producing a runnable (or nearly runnable) result. No need to re-write your whole project. Transpiled source code is easier to cross reference, debug, maintain, and optimize.
+If you need to release your source code in another language, you need a Transpiler. The goal of JSConvert is to preserve as much of the authors original design intent as possible while producing a runnable (or nearly runnable) result. No need to re-write your whole project. Transpiled source code is easier to cross reference, debug, maintain, and optimize.
 
 A good Transpiler must do more than simply convert syntax. This is why JSConvert was developed with a rules engine that can grow and be refined as needed.  Rules can be used to refactor, add poly-fills, fix code, and more. In theory, given a correct set of rules, JSConvert can transpile Javascript to almost any comparable language.
 
