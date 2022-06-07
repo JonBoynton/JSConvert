@@ -32,7 +32,7 @@ __license__ = "Apache License, Version 2.0"
 
 __all__ = [
     "OpenBrace", "CloseBrace", "Semicolon", "Commas", "OpenParenthesis", 
-    "CloseParenthesis", "CloseExpression"
+    "CloseParenthesis", "CloseExpression", "UndefVarDecl", "UndefLetDecl"
     ]
 
     
@@ -154,5 +154,27 @@ class CloseExpression(CodeRule):
             b.add(")")
             b.add(b.current().extended and "." or " ")
             
-        return 1 
-
+        return 1
+     
+class UndefinedDecl(CodeRule):
+    def __init__(self, name):
+        super().__init__("undefined-"+name+"-declaration", ["KW_"+name, "Separator"])
+        
+    def apply(self, b, offset):
+        if b.next().name == ";":
+            b.add(b.current().value)
+            b.add(" = None")
+            b.new_line()
+            return 2
+            
+        return 1
+    
+class UndefVarDecl(UndefinedDecl):
+    def __init__(self):
+        super().__init__("var")
+        
+class UndefLetDecl(UndefinedDecl):
+    def __init__(self):
+        super().__init__("let")
+        
+        

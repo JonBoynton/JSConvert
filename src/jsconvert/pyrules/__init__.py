@@ -1,4 +1,4 @@
-__all__ = ["separators", "components", "operators", "errors", "polyfills", "maths", "defaults"]
+__all__ = ["components","defaults","errors","maths","operators","polyfills","separators","stringfills"]
 
 INPUT_FILE_EXTENSION = ".js"
 OUTPUT_FILE_EXTENSION = ".py"

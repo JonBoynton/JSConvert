@@ -28,7 +28,7 @@ __author__ = "Jon L. Boynton"
 __copyright__ = "Jon L. Boynton 2022"
 __license__ = "Apache License, Version 2.0"
 
-__all__ = ["MathFunc"]
+__all__ = ["MathFunc", "MathLibFunc"]
 
 
 class MathFunc(CodeRule):
@@ -43,4 +43,21 @@ class MathFunc(CodeRule):
         return (b.current().name == "Math" and
             b.next().name in self.math_funcs and
             not b.current().is_nested() and 1) or 0
+            
+            
+class MathLibFunc(CodeRule):
+    def __init__(self):
+        super().__init__("math-library", ["GlobalType", "Function"])
+          
+    def apply(self, b, offset):
+        if b.current().name == "Math" and not b.current().is_nested():
+            fn = b.next().name
+            if not b.import_map.is_imported(fn):
+                b.insert_import_statement("import {"+fn+"} from 'math';")
+            
+            return 1
+        
+        return 0
+    
+            
           

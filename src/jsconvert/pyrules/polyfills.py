@@ -25,34 +25,20 @@ specific language governing permissions and limitations under the License.
 '''
 
 from jsconvert.transpiler import CodeRule
-from jsconvert.comp import Assignment, Extendable, RootEntry, Expression
+from jsconvert.comp import RootEntry, VariableType, StringType, NumberType, Classs
 from jsconvert.lang import KW_switch
 
 __author__ = "Jon L. Boynton"
 __copyright__ = "Jon L. Boynton 2022"
 __license__ = "Apache License, Version 2.0"
 
-__all__ = ["TrueFill", "FalseFill", "TypeFill", "InstanceFill", "ToStringFill", 
-    "CharCodeFill", "CharAtFill", "LengthFill", "SwitchFill", "CaseFill", "DefaultCaseFill",
-    "LabelBreakFill", "PromiseCatchFill", "SingletonFill", "SubstringFill", "IndexOfFill",
-    "RefactorFunc", "RefactorBuiltins", "FromCharCodeFill"
+__all__ = ["TrueFill", "FalseFill", "TypeFill", "InstanceFill", "InstanceGlobalFill",
+     "ToStringFill", "AddStrDefFill", "LengthFill", "LengthThisFill", "SwitchFill", 
+     "CaseFill", "DefaultCaseFill", "LabelBreakFill", "PromiseCatchFill", "SingletonFill", 
+     "MapHasFill", "RefactorMisc", "DateNowFill", "JSONStringifyFill", "RefactorBuiltins", 
+     "RefactorNewInstance", "UndefinedFill"
     ]
 
-
-# searches the buffer in reverse to find a string matching the "e" entry name then inserts a token
-def _insert_prefix(e, buffer, token):
-    while isinstance(e.par, Extendable) and e.par.extended is e:
-        e = e.par
-        
-    nm = e.name or str(e)
-    if nm == "this":
-        nm = "self"
-        
-    for i in range(len(buffer.buf)-1, -1, -1):
-    # for i in reversed(range(0, len(buffer.buf))):
-        if buffer.buf[i] == nm:
-            buffer.buf.insert(i, token)
-            break
 
 
 class TrueFill(CodeRule):
@@ -102,14 +88,21 @@ class TypeFill(CodeRule):
 
     
 class InstanceFill(CodeRule):
-    def __init__(self):
-        super().__init__("instance-fill", ["VariableType", "KW_instanceof", "VariableType"])
+    def __init__(self, name=None, path=None):
+        super().__init__(name or "instance-fill", path or ["VariableType", "KW_instanceof", "VariableType"])
         
     def apply(self, b, offset):
-        b.add("isinstance("+b.current().name+", "+b.current(2).name+")")
-        return 3
+        if b.insert_prefix("isinstance(", {"this": "self"}):
+            b.add(b.current().name+", "+b.current(2).name+")")
+            return 3
+        
+        return 0
     
-
+class InstanceGlobalFill(InstanceFill):
+    def __init__(self):
+        super().__init__("instance-global-fill", ["VariableType", "KW_instanceof", "GlobalType"])
+        
+        
 class ToStringFill(CodeRule):
     def __init__(self):
         super().__init__("toString-fill", ["Function", "NameType", "Begin", "FunctionEnd"])
@@ -118,76 +111,55 @@ class ToStringFill(CodeRule):
         if b.next().name != "toString" or not b.current().is_nested():
             return 0
         
-        b.buf.pop()
-        _insert_prefix(b.current(), b, "str(")
-        b.add(")")
-        b.add(b.current(offset).extended and "." or " ")
-        return 4
-
-    
-class CharCodeFill(CodeRule):
-    def __init__(self):
-        super().__init__("charCodeAt-fill", ["Function", "ANY", "FunctionEnd"])
-          
-    def apply(self, b, offset):
-        if b.next().name != "charCodeAt" or not b.current().is_nested():
-            return 0
-        
-        b.buf.pop()
-        _insert_prefix(b.current(), b, "ord(")
-        
-        sb = b.get_sub_buffer(b.current())
-        sb.entries = sb.entries[2:sb.size-1]
-        sb.size -= 3
-        b.add("["+"".join(sb.transpile()).rstrip()+"]")
-        return  offset
-
-    
-class FromCharCodeFill(CodeRule):
-    def __init__(self):
-        super().__init__("from-charcode-fill", ["GlobalType", "Function", "NameType"])
-          
-    def apply(self, b, offset):
-        if b.current().name == "String" and b.next().name == "fromCharCode":
-            b.add("chr")
-            return 3
+        if b.insert_prefix("str(", {"this": "self"}):
+            b.add(")")
+            b.add(b.current(offset).extended and "." or " ")
+            return 4
         
         return 0
 
-    
-class CharAtFill(CodeRule):
-    def __init__(self):
-        super().__init__("charAt-fill", ["Function", "ANY", "FunctionEnd"])
-    
+class AddStrDefFill(CodeRule):
+        
+    def __init__(self, name=None):
+        super().__init__(name or "add-str-definition-fill", ["Method", "Declaration", "Constructor", "Begin", "End"])
+        
     def apply(self, b, offset):
-        if b.next().name != "charAt" or not b.current().is_nested():
-            return 0
-        
-        sb = b.get_sub_buffer(b.current())
-        sb.entries = sb.entries[2:sb.size-1]
-        sb.size -= 3
-        
-        b.buf.pop()
-        b.add("["+"".join(sb.transpile()).rstrip()+"]")
-        b.add(b.current(offset).extended and "." or " ")
-        return offset+1
-              
+        if b.current().value == "toString":
+            c = b.current().par.par
+            
+            if c and c.par and isinstance(c.par, Classs):
+                b.new_line()
+                sb = []
+                sb.append("def __str__(self):")
+                sb.append("\n"+b.indent(1))
+                sb.append("return self.toString()")
+                sb.append("\n"+b.indent())
+                b.insert_code("".join(sb))
+            
+        return 0 
     
+              
 class LengthFill(CodeRule):
-    def __init__(self):
-        super().__init__("length-fill", ["VariableType"])
+    def __init__(self, name=None, path=None):
+        super().__init__(name or "length-fill", path or ["Assignment", "Operator", "Expression", "VariableType", "VariableType"])
                 
     def apply(self, b, offset):
-        if (b.current().name != "length" or
-            not b.current().is_nested() or
-            isinstance(b.next(), Assignment)):
-            return 0
+        c = b.current(offset)
+        if c.name == "length" and not c.extended and b.next().name in ("=", "+=", "-=", "*=" "/=", "%="):
+            b.space()
+            b.add(b.next().name)
+            b.space()
+            b.add("len(")
+            fn = b.current(offset-1).get_full_name()
+            b.add(fn[:len(fn) - 7])
+            b.add(")")            
+            return offset+1
         
-        b.buf.pop()
-        _insert_prefix(b.prev(), b, "len(")
-        b.add(")")            
-        b.add(b.current().extended and "." or " ")            
-        return 1
+        return 0
+    
+class LengthThisFill(LengthFill):
+    def __init__(self, name=None, path=None):
+        super().__init__("length-this-fill", ["Assignment", "Operator", "Expression", "KW_this", "VariableType", "VariableType"])
     
    
 class SwitchFill(CodeRule):
@@ -332,72 +304,84 @@ class SingletonFill(CodeRule):
                  
         fn = (left.startswith("(") and left or "("+left+")");
         nm = b.insert_function(fn+right)
-    
-        if left == "()":
-            b.add("lambda: " + nm + fn)
-        else:
-            b.add("lambda "+ left + ": " + nm + fn)
+        b.add(nm)
+        
+        # did not really need to us a lambda here!
+        # if left == "()":
+        #     b.add("lambda: " + nm + fn)
+        # else:
+        #     b.add("lambda "+ left + ": " + nm + fn)
 
         
         return b.get_sub_buffer(b.current(offset)).size + offset + 1
-
-
-class SubstringFill(CodeRule):
+    
+    
+class MapHasFill(CodeRule):
     def __init__(self):
-        super().__init__("substring-fill", ["Function", "ANY", "FunctionEnd"])
-        
+        super().__init__("Map-has-fill", ["Function","NameType","Begin","Expression","ANY","FunctionEnd"])
+          
     def apply(self, b, offset):
-        c = b.current()
-        if (c.name != "substring" or
-            not c.is_nested() or 
-            not isinstance(b.current(3), Expression)):
+        if b.next().name != "map" or not b.current().is_nested() or offset != 5:
             return 0
         
-        if b.peek() == ".":
-            b.buf.pop()
-            
-        b.add("[")
+        v = b.current(4)
+        if not isinstance(v, (VariableType, StringType, NumberType)):
+            return 0
         
-        ch = b.current().get_children()
-        b.append_buffer(b.get_sub_buffer(ch[2]))
-        b.trim()
-        b.add(":")
+        if b.insert_prefix(str(v)+" in ", {"this": "self"}):
+            return offset
         
-        if ch[3].name == ",":
-            b.append_buffer(b.get_sub_buffer(ch[4]))
-            b.trim()
-            
-        b.add("]")
-        b.add(b.current(offset).extended and "." or " ")
-                    
-        return offset+1
-   
+        return 0
+    
+    
         
-class IndexOfFill(CodeRule):
+class DateNowFill(CodeRule):
     def __init__(self):
+        super().__init__("Date-now-fill", ["GlobalType", "Function", "NameType", "Begin", "FunctionEnd"])
+          
+    def apply(self, b, offset):
+        if b.current().name != "Date" or b.next().name != "now":
+            return 0
+        
+        if not b.import_map.is_imported("time"):
+            b.insert_import_statement("import {time} from 'time';")
+        
+        b.add("int(time() * 1000)")
+        return offset+1
 
-        super().__init__("indexOf-fill", ["Function", "NameType", "Begin", "Expression", "StringType"])
+class JSONStringifyFill(CodeRule):
+    def __init__(self):
+        super().__init__("Date-now-fill", ["GlobalType", "Function", "NameType"])
+          
+    def apply(self, b, offset):
+        if b.current().name != "JSON" or b.next().name != "stringify":
+            return 0
+        
+        if not b.import_map.is_imported("json"):
+            b.insert_import_statement("import {dumps} from 'json';")
+        
+        b.add("dumps")
+        return offset+1
+
+class UndefinedFill(CodeRule):
+    
+    factors = { }
+    nested = True
+    
+    def __init__(self, name=None, path=None):
+        super().__init__("undefined-fill", ["KW_undefined"])
         
     def apply(self, b, offset):
-        if b.current().name == "indexOf" and b.current().is_nested():
-            b.add("find")
-            return 2 
-        
-        return 0   
-
+        b.add("None")
+        return 1
 
 class RefactorFunc(CodeRule):
     
-    factors = {
-        "startsWith": "startswith",
-        "endsWith": "endswith",
-        "trim": "strip"
-        }
-    
+    factors = { }
     nested = True
     
-    def __init__(self, name=None):
-        super().__init__(name or "refactor-functions", ["Function"])
+    def __init__(self, name=None, path=None):
+        super().__init__(name or "refactor-functions", path or ["Function"])
         
     def apply(self, b, offset):
         if b.current().name in self.factors.keys():
@@ -407,18 +391,64 @@ class RefactorFunc(CodeRule):
                 return 2
             
         return 0
-
- 
+    
+class RefactorFuncNoArgs(RefactorFunc):
+        
+    def __init__(self, name=None):
+        super().__init__(name or "refactor-functions-no-args", ["Function", "NameType", "Begin", "FunctionEnd"])
+    
+    def apply(self, b, offset):
+        if b.current().name in self.factors.keys():
+            c = b.current()
+            if c.is_nested() == self.nested:
+                b.add(self.factors.get(c.name))
+                b.add("()")
+                b.add(b.current(3).extended and "." or " ")
+                return 4
+            
+        return 0 
+    
 class RefactorBuiltins(RefactorFunc):
     
     factors = {
         "parseInt": "int",
         "parseFloat": "float",
-        "Boolean": "bool"
+        "Boolean": "bool",
+        "Number": "float",
+        "Uint8Array": "bytearray",
+        "Set": "set"
         }
     
     nested = False 
     
     def __init__(self):
         super().__init__("refactor-built-in-functions")
+        
+class RefactorMisc(RefactorFunc):
+    
+    factors = {
+        "push": "append"
+        }
+    
+    def __init__(self):
+        super().__init__("refactor-misc")
+        
+        
+class RefactorNewInstance(CodeRule):
+    factors = {
+        "String": "str",
+        "Uint8Array": "bytearray"
+    }
+    nested = False
+    
+    def __init__(self):
+        super().__init__("refactor-new-instance", ["KW_new","Function","NameType"])
+          
+    def apply(self, b, offset):
+        if b.next().name in self.factors.keys():
+            b.add(self.factors.get(b.next().name))
+            return 3
+        
+        return 0
+
         

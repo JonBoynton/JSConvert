@@ -23,15 +23,17 @@ specific language governing permissions and limitations under the License.
 '''
 
 from jsconvert.transpiler import CodeRule
+from jsconvert.comp import Extendable, Assignment
+# from jsconvert.comp import VariableType, StringType
 
 __author__ = "Jon L. Boynton"
 __copyright__ = "Jon L. Boynton 2022"
 __license__ = "Apache License, Version 2.0"
 
 __all__ = ["NotOp", "TildaOp", "OrBool", "AndBool", "EqOp", 
-    "NotEqOp", "LeftIncrOp", "AssignLeftIncrOp", "RightIncrOp", "ThisRightIncrOp", 
-    "AssignRightIncrOp", "ThisAssignRightIncrOp", "ShiftUnSign", "PrecedenceOper", "Comp", 
-    "Oper"
+    "IsEqOp", "NotEqOp", "IsNotEqOp", "LeftIncrOp", "AssignLeftIncrOp", 
+    "RightIncrOp", "ThisRightIncrOp", "AssignRightIncrOp", "ThisAssignRightIncrOp", "ShiftUnSign", 
+    "PrecedenceOper", "Comp", "Oper"
     ]
 
 
@@ -113,6 +115,28 @@ class EqOp(CodeRule):
         b.add("==")
         b.space()           
         return 1
+    
+    
+class IsEqOp(CodeRule):
+    def __init__(self, name=None, path=None):
+        super().__init__(name or "equal-to", path or ["VariableType", "Compare", "VariableType"])
+               
+    def apply(self, b, offset):
+        if b.next().name != "===":
+            return 0
+        
+        b.add(str(b.current()))
+        b.add(" is ")
+        b.add(str(b.current(2)))           
+        return 3
+
+
+    
+# don't think this happens    
+# class IsStringEqOp(IsEqOp):
+#     def __init__(self):
+#         super().__init__("equal-to", ["StringType", "Compare", "StringType"])
+#
 
     
 class NotEqOp(CodeRule):
@@ -130,6 +154,28 @@ class NotEqOp(CodeRule):
         return 1
     
     
+class IsNotEqOp(CodeRule):
+    def __init__(self, name=None, path=None):
+        super().__init__(name or "equal-to", path or ["VariableType", "Compare", "VariableType"])
+               
+    def apply(self, b, offset):
+        if b.next().name != "!==":
+            return 0
+        
+        b.add(str(b.current()))
+        b.add(" is not ")
+        b.add(str(b.current(2)))           
+        return 3
+    
+
+# don't think this happens    
+# class IsNotStringEqOp(IsNotEqOp):
+#     def __init__(self):
+#         super().__init__("equal-to", ["StringType", "Compare", "StringType"])
+#
+#
+
+        
 class Comp(CodeRule):
     def __init__(self):
         super().__init__("Compare", ["Compare"])       
@@ -179,11 +225,14 @@ class Oper(CodeRule):
         c = b.current()
         if c.name == "++" or c.name == "--":
             return 0
-        if not b.peek().isspace():
+        
+        b.space()        
+        b.add(c.name)
+        
+        # only add a space if in an expression
+        if isinstance(b.prev(), (Extendable, Assignment)):
             b.space()
             
-        b.add(c.name)
-        b.space()
         return 1
     
     

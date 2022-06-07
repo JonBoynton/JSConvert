@@ -42,10 +42,10 @@ class CatchStm(CodeRule):
     
 class CatchExceptStm(CodeRule):
     def __init__(self):
-        super().__init__("catch", ["KW_catch", "Expression", "ANY", "VariableType"])
+        super().__init__("catch", ["KW_catch", "Expression", "Begin", "GlobalType", "ExpressionEnd"])
 
     def apply(self, b, offset):
-        b.add("except Exception as "+b.current(offset).name)        
+        b.add("except Exception as "+b.current(3).name)        
         return offset+1
 
     

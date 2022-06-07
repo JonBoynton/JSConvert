@@ -31,29 +31,30 @@ from jsconvert.comp import (
     Attribute,
     VariableType,
     NameType,
-    StringType, 
+    StringType,
+    Begin,
     End, 
     Method, 
     Assignment, 
     RootEntry,
     Constructor,
-    Declaration,
     Block,
     StatementBlock,
     TernaryExpression
     )
-from jsconvert.lang import KW_do, KW_import, KW_if, KW_class
+from jsconvert.lang import KW_import, KW_if, KW_class
 
 __author__ = "Jon L. Boynton"
 __copyright__ = "Jon L. Boynton 2022"
 __license__ = "Apache License, Version 2.0"
 
-__all__ = ["ObjType", "GlobalVar", "Attr", "FunctionDecl",
-    "Else", "EndElse", "ClosedStatementBlock", "OpenStatementBlock", "DeclareVar", 
-    "DeclareLet", "DeclareConst", "DoWhile", "ImportFrom", "ThisType", 
-    "SuperType", "ArrayBegin", "LabelStm", "ImportStm", "ImportFromStm", 
-    "LambdaFunc", "TernaryExpr", "DeclareGet", "DeclareSet", "DeclareMethod", 
-    "EmptyMethodDecl", "ConstructorDecl", "ClassDecl", "CatchOnly", "WhileStm"
+__all__ = ["ObjType", "GlobalVar", "Attr", "FunctionDecl","Else", 
+    "EndElse", "ClosedStatementBlock", "OpenStatementBlock", "DeclareVar", "DeclareLet", 
+    "ClassExtendsDecl", "DeclareConst", "DoWhile", "ImportFrom", "ThisType", 
+    "SuperConstType", "SuperFuncType", "SuperVarType", "ArrayBegin", "LabelStm", 
+    "ImportStm", "ImportFromStm", "LambdaFunc", "TernaryExpr", "DeclareGet", 
+    "DeclareSet", "DeclareMethod", "EmptyMethodDecl", "ConstructorDecl", "ClassDecl",
+    "CatchOnly", "WhileStm", "DeleteVar", "DeleteThisVar"
     ]
 
 
@@ -63,13 +64,15 @@ def _clean_import_package(name):
     elif name.endswith(".jsx"):
         name = name[: len(name)-3]
     
-    if name.startswith("."):    
-        if name.startswith("./"):
-            name = "."+name[2:]
-        elif name.startswith("../"):
-            name = ".."+name[3:]
-            
-    return name
+    na = name.split("/")
+    
+    if len(na) > 1:
+        if na[0].startswith("."):
+            name = na[0] + ".".join(na).strip(".")
+        else:
+            name = ".".join(na).rstrip(".")
+    
+    return name 
 
 
 def _is_global_scope(e):
@@ -87,29 +90,29 @@ class LambdaFunc(CodeRule):
         c = b.current()
         sb = b.get_sub_buffer(b.current(offset+1))
         
+        # check if lambda uses a simple expression
         if isinstance(b.current(offset+1), Expression):
             if offset == 3:
                 b.add("lambda: ")
                 b.append_buffer(sb)
             else:
                 b.add("lambda ")
-                b.append_buffer(b.get_slice(b.offset+1, b.offset+offset))
+                if isinstance(b.next(), Begin):
+                    bsl = b.get_slice(b.offset+2, b.offset+offset-1) # exclude ()
+                else:
+                    bsl = b.get_slice(b.offset+1, b.offset+offset) # slice from start to operator
+                b.append_buffer(bsl)    
                 b.add(": ")
                 b.append_buffer(sb)
 
+        # lambda uses a code block
         else:
             sa = c.cf.spec[c.offs: c.pos].split("=>", 1)
             left = sa[0].rstrip()
             right = sa[1].lstrip() 
                      
-            fn = (left.startswith("(") and left or "("+left+")");
-            nm = b.insert_function(fn+right)
-        
-            if left == "()":
-                b.add("lambda: " + nm + fn)
-            else:
-                b.add("lambda "+ left + ": " + nm + fn)
-
+            fn = (left.startswith("(") and left) or "("+left+")";
+            b.add(b.insert_function(fn+right))
                 
         return offset + sb.size + 2
 
@@ -226,7 +229,7 @@ class ImportFrom(CodeRule):
         return 1 
         return 1        
 
-    
+
 class ObjType(CodeRule):
     def __init__(self):
         super().__init__("object_type", ["ObjectType"])
@@ -237,7 +240,7 @@ class ObjType(CodeRule):
         sb.inobject = True
         
         ch = c.get_children()
-        sb.add("{")
+        sb.add("type('', (), {")
         sb.new_line(1)
         cnt = 2
         ln = len(ch)
@@ -256,7 +259,7 @@ class ObjType(CodeRule):
             elif c.name == "}":
                 sb.trim()    
                 sb.new_line(-1)
-                sb.add("}")
+                sb.add("})()")
                 if c.extended:
                     sb.add(".")
             elif isinstance(c, VariableType):
@@ -270,7 +273,8 @@ class ObjType(CodeRule):
         sb.offset = sb.size    
         b.append_buffer(sb)            
         return cnt      
-   
+
+# Note: I think this is an old message! we may not need this since we now have "GlobalType"?   
 # start here!!! I would like to use NameType to identify built-in Classes instead of VariableType
 # we need to create some code in Container that checks for varible declarations for var,let,conts, and Attribute
 # This may effect this code, also we could add 'Assignment' and 'Increment' variation for  GlobalVar below
@@ -308,17 +312,40 @@ class ThisType(CodeRule):
         return 1 
 
           
-class SuperType(CodeRule):
+class SuperConstType(CodeRule):
     def __init__(self):
-        super().__init__("this", ["KW_super"])
+        super().__init__("super-constructor", ["KW_super", "Expression"])
 
         
     def apply(self, b, offset):
-        b.add("super")
+        c = b.current()
+        if c.par and isinstance(c.par.par, Constructor):
+            b.add("super().__init__")
+            
+            sb = b.get_sub_buffer(b.next())
+            offset += b.append_buffer(sb)+1
+            b.new_line()
+            return offset
+        
+        return 0
+                  
+class SuperFuncType(CodeRule):
+    def __init__(self, name=None, path=None):
+        super().__init__(name or "super-function", path or ["KW_super", "Function"])
+
+        
+    def apply(self, b, offset):
+        b.add("super()")
         if b.current().extended:
             b.add(".")    
-        return 1 
-                  
+        return 1
+    
+    
+class SuperVarType(SuperFuncType):
+    def __init__(self):
+        super().__init__("super-variable", ["KW_super", "VariableType"])
+
+    
 
 class Else(CodeRule):
     def __init__(self):
@@ -406,6 +433,23 @@ class Declareable(CodeRule):
 class DeclareVar(Declareable):
     def __init__(self):
         super().__init__("declare_var", "KW_var")
+        
+        
+class DeleteVar(CodeRule):
+    def __init__(self, name=None, path=None):
+        super().__init__(name or "delete_var", path or ["Modifier","VariableType"])
+        
+    def apply(self, b, offset):
+        if b.current().name == "delete":
+            b.add("del")
+            b.space()
+            return 1
+        
+        return 0
+    
+class DeleteThisVar(DeleteVar):
+    def __init__(self):
+        super().__init__("delete_this-var", ["Modifier","KW_this","VariableType"])
 
          
 class DeclareLet(Declareable):
@@ -437,16 +481,25 @@ class WhileStm(CodeRule):
      
 class DoWhile(CodeRule):
     def __init__(self):
-        super().__init__("do_while", ["End", "KW_while"])
+        super().__init__("do_while", ["KW_do", "StatementBlock"])
      
     def apply(self, b, offset):
-        if not isinstance(b.current(1).get_previous(), KW_do):
-            return 0
-        
+        b.add("while True")
+        sb = b.get_sub_buffer(b.next())
+        offset += b.append_buffer(sb)+1
         b.trim()
-        b.new_line(-1)
-        b.add("}")
-        return 1 
+        b.new_line(1)
+        b.new_line()
+        b.add("if not (")
+        sb = b.get_sub_buffer(b.current(offset)) # should be the 'while' statement
+        offset += b.append_buffer(sb)
+        b.trim()
+        b.add("):")
+        b.new_line(1)
+        b.add("break")
+        b.new_line(-2)
+        b.new_line()
+        return offset 
     
 
 class ArrayBegin(CodeRule):
@@ -549,13 +602,20 @@ class ClassDecl(CodeRule):
     def apply(self, b, offset):
         b.new_line()
         b.add("class "+b.next().value+"(")
-        if isinstance(b.current(2), Declaration):
-            b.add(b.next().value+")")
-            return 3
         b.add(")")                  
         return 2
     
-    
+class ClassExtendsDecl(CodeRule):
+    def __init__(self):
+        super().__init__("class_extends", ["KW_class", "Declaration", "KW_extends"])
+        
+    def apply(self, b, offset):
+        b.new_line()
+        b.add("class "+b.next().value+"(")
+        b.add(b.current(2).value)
+        b.add(")")                  
+        return 3
+        
 class CatchOnly(CodeRule):
     def __init__(self):
 
@@ -564,5 +624,5 @@ class CatchOnly(CodeRule):
     def apply(self, b, offset):
 
         b.add("catch")
-        return 2     
+        return 2
     

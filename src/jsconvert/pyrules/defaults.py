@@ -108,13 +108,13 @@ class NullTyp(CodeRule):
         b.add("None")
         return 1
 
-    
+        
 class Rule1(DefaultRule):
     def __init__(self):
         super().__init__("defult_rule1", [
             "Separator", "Begin", "End", "NameType", "KW_break", "KW_while", "KW_switch",
             "KW_for","KW_try", "KW_continue", "Operator",
-            "KW_null", "KW_constructor"])
+            "KW_null", "KW_constructor", "KW_undefined"])
 
         
 class Rule2(DefaultRule):
