@@ -58,7 +58,7 @@ __copyright__ = "Jon L. Boynton 2022"
 __license__ = "Apache License, Version 2.0"
 
 
-# Words reserved by the javascript language (ES6)
+# Words reserved by the javascript language (ES6) + undefined
 JS_KEYWORDS = (
     "abstract", "arguments", "as", "await", "boolean", "break", "byte", "case", "catch", 
     "char", "class", "const", "continue", "constructor", "debugger", "default", "delete", "do", 
@@ -67,7 +67,7 @@ JS_KEYWORDS = (
     "in", "instanceof", "int", "interface", "let", "long", "native", "new", "null", "of",
     "package", "private", "protected", "public", "return", "short", "static", 
     "super", "switch", "synchronized", "this", "throw", "throws", "transient", 
-    "true", "try", "typeof", "var", "void", "volatile", "while", "with", "yield")
+    "true", "try", "typeof", "var", "void", "volatile", "while", "with", "yield", "undefined")
 
 
 
@@ -370,16 +370,19 @@ class KW_return(Statement):
 
 class KW_class(Classs):
     def __init__(self, par, offs):
-        super().__init__(par, offs) 
+        super().__init__(par, offs)
 
         
 class KW_typeof(Keyword):
     def __init__(self, par, offs):
         super().__init__(par, offs, 6, "typeof")
-
         
+     
 class KW_instanceof(Keyword):
     def __init__(self, par, offs):
         super().__init__(par, offs, 10, "instanceof")
+        
 
-
+class KW_undefined(Keyword):
+    def __init__(self, par, offs):
+        super().__init__(par, offs, 9, "undefined")

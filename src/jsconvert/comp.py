@@ -176,6 +176,9 @@ class CodeFactory():
                 else:
                     st =  GlobalType(e, i, tk)
             
+            # Allow rare keyword being used as a class method or Function name
+            elif isinstance(st, Modifier) and self.next_char(e.pos)[0] == "(":
+                st = Method(e, i, "", tk) if _is_class_child(e) else Function(e, i, tk)
             
         return st
 
@@ -260,6 +263,9 @@ class CodeEntry:
         
         while self.has_more:
             se = self._next()
+            
+            # note: this is a good place for a debugging trap using se type
+            
             if se:
                 if se.name == ".":
                     if isinstance(se.par, Extendable):
@@ -354,6 +360,7 @@ class CodeEntry:
         if (entry or self).is_leaf():
             return []
 
+        # propagate request upward to a container instance
         return self.par.get_children(entry or self)
     
     def get_descendants(self):
@@ -543,6 +550,8 @@ class Container(CodeEntry):
                     return lst
                 
             ln = len(self.stack)
+            
+            # find all stack entries that have 'entry' as a parent and are not comments
             while i < ln and self.stack[i].inset > entry.inset:
                 e = self.stack[i]
                 if e.par is entry and not isinstance(e, Comment):
@@ -797,6 +806,12 @@ class Block(CodeEntry):
         
 
 class StatementBlock(Container):
+    """A Container instance that holding the components of a Statement or Class.
+    
+    Typically, a StatementBlock represents the components within curly braces {...} 
+    following a Statement keyword; such as 'if'. It does not include the statements
+    condition arguments (if any).
+    """
     def __init__(self, par, offs, inscope=True):
         super().__init__(par, offs, inscope)
         self.extended = False
@@ -1470,7 +1485,14 @@ class Comment(CodeEntry, Leaf):
     def __init__(self, par, offs, name):
         super().__init__(par, offs, name.replace("#","/"))
         i = offs+len(self.name)
-        self.pos = self.name == "/*" and (par.cf.spec.find("*/", i)+2) or par.cf.spec.find("\n", i)
+        
+        if self.name == "/*":
+            i = par.cf.spec.find("*/", i)
+            self.pos = i + 2 if i != -1 else len(par.cf.spec)
+        else:
+            i = par.cf.spec.find("\n", i)
+            self.pos = i if i != -1 else len(par.cf.spec)
+
     
     def noEdit(self):
         """Returns True if a Comment contains the singular command 'no-edit'

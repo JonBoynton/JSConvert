@@ -27,9 +27,9 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 '''
 
-from pathlib import Path, WindowsPath
+from pathlib import Path
 from importlib import import_module
-from jsconvert.comp import  CodeFactory, Attribute, StringType, Container, Comment, EMPTY, Block
+from jsconvert.comp import  CodeFactory, CodeEntry, Attribute, StringType, Container, Comment, EMPTY, Block, End
 from jsconvert.lang import Keywords, KW_import
 
 __author__ = "Jon L. Boynton"
@@ -37,6 +37,11 @@ __copyright__ = "Jon L. Boynton 2022"
 __license__ = "Apache License, Version 2.0"
 
 def _loadFiles(dir_, ext=".js", files=None):
+    """Creates a list of files by recursing a file director.
+    
+    Files returned are filtered by the specified extension 'ext' (optional). The defaul
+    extension is '.js'. If 'dir_' is an ordiary file, it will be returned alone in the list.
+    """
     if files == None:
         files = []
         
@@ -49,6 +54,26 @@ def _loadFiles(dir_, ext=".js", files=None):
                 
     elif dir_.suffix == ext and dir_.stem != "index":
         files.append(dir_)
+        
+    return files 
+
+def _loadDir(dir_, recurse=False, files=None):
+    """Creates a list of files by recursing a file director.
+    
+    Files returned are filtered by the specified extension 'ext' (optional). The defaul
+    extension is '.js'. If 'dir_' is an ordiary file, it will be returned alone in the list.
+    """
+    if files == None:
+        files = []
+        
+    if not dir_.is_dir():
+        dir_ = dir_.parent
+        
+    for f in dir_.iterdir():
+        if f.is_dir():
+            files.append(f)
+            if recurse:
+                _loadDir(f, True, files)
         
     return files 
 
@@ -67,16 +92,89 @@ def _default_string(entry):
 
 
 def _get_ext(ruleset):
-    rm = import_module(ruleset)
+    rm = import_module(ruleset, "jsconvert")
     return {
         "input": hasattr(rm, "INPUT_FILE_EXTENSION") and rm.INPUT_FILE_EXTENSION or ".js",
         "output": hasattr(rm, "OUTPUT_FILE_EXTENSION") and rm.OUTPUT_FILE_EXTENSION or ".py",
         "dom": hasattr(rm, "DOM_FILE_EXTENSION") and rm.DOM_FILE_EXTENSION or ".dom",
         }
-    
-      
 
-class RuleManager():
+        
+class RuleBucket():
+    """Provides a hierarchical directory for matching and processing code rules."""
+    
+    def __init__(self):  
+        self._map = dict(())
+        self._list = []
+
+            
+    def _add(self, name):
+        """Adds a new RuleBucket with the specified name.
+        
+        Returns the new bucket if created or the old bucket if it already
+        existed.
+        """
+        e = self._map.get(name)
+        if not e:
+            e = name != "ANY" and RuleBucket() or AnyBucket()
+            self._map.update({name: e})
+            
+        return e
+
+    def process(self, buffer, offs=0):
+        """Evaluates the CodeEntry at the current buffer position + offs."""
+        
+        pos = buffer.offset + offs
+        if pos < buffer.size:
+            b = self._map.get(type(buffer.entries[pos]).__name__)
+            
+            if b and b.process(buffer, offs+1):
+                return True
+            
+            b = self._map.get("ANY")
+            
+            if b and b.process(buffer, offs+1):
+                return True
+        
+        try:    
+            for itm in self._list:
+                i = itm.apply(buffer, offs-1)
+                if i:
+                    buffer.offset += i
+                    return True
+                
+        except Exception as err:
+            raise RuleProcessingException(err, buffer, itm, buffer.current(), buffer.current(offs-1))
+            
+        
+        # advance to next entry if not handled by any Rule   
+        if self is buffer.rules:
+            buffer.offset += 1
+            return True
+           
+        return False
+        
+
+class AnyBucket(RuleBucket):
+    """Variation of RuleBucket for evaluating all child components of a buffer entry."""
+    
+    def process(self, buffer, offs=0):
+        offs -= 2 # resets cursor offset to select the entry before <ANY> 
+        c = buffer.current(offs)
+        
+        # iterate through the children of selected entry
+        for c in c.get_children():
+            # skip over descendants of child in the buffer stack
+            while buffer.entries[buffer.offset + offs] is not c:
+                offs += 1
+                
+            if super().process(buffer, offs):
+                return True
+            offs += 1
+                      
+        return False
+    
+class RuleManager(RuleBucket):
     """Maintains a collection of code rules for transcribing source files.
     
     This manager is constructed using the name of a module that contains
@@ -87,9 +185,8 @@ class RuleManager():
     """
     
     def __init__(self, module="", keywords=Keywords().get_code_instance):
-        self.head = RuleBucket()
-        self.head.keywords = keywords
-        self.last_rule = CodeRule()
+        super().__init__()
+        self._keywords = keywords
         if module:
             self.add_rules(module)
             
@@ -102,90 +199,11 @@ class RuleManager():
     def add_rule(self, rule):
         """Adds a single CodeRule instance to this manager."""
         
-        b = self.head
+        b = self
         for e in rule.path():
-            b = b.add(e)
+            b = b._add(e)
             
-        b.list.append(rule)
-        
-    def transpile(self, code):
-        """Returns a translated version of the input source code string."""
-        
-        return "".join(self._create_code_buffer(code).transpile())
-
-    def _create_code_buffer(self, code):
-        e = CodeFactory(code, self.head.keywords).get_code()
-        return CodeBuffer(e, self.head)
-
-        
-class RuleBucket():
-    """Provides a hierarchical directory for matching and processing code rules."""
-    
-    def __init__(self):  
-        self.map = dict(())
-        self.list = []
-        
-    def get(self, name):
-        """Returns a RuleBucket for the specified name or None if not found"""
-        return self.map.get(name)
-            
-    def add(self, name):
-        """Adds a new RuleBucket with the specified name.
-        
-        Returns the new bucket if created or the old bucket if it already
-        existed.
-        """
-        e = self.map.get(name)
-        if not e:
-            e = name != "ANY" and RuleBucket() or AnyBucket()
-            self.map.update({name: e})
-            
-        return e
-
-    def process(self, buffer, offs=0):
-        """Evaluates the CodeEntry at the current buffer position + offs."""
-        
-        pos = buffer.offset + offs
-        if pos < buffer.size:
-            b = self.map.get(type(buffer.entries[pos]).__name__)
-            
-            if b and b.process(buffer, offs+1):
-                return True
-            
-            b = self.map.get("ANY")
-            
-            if b and b.process(buffer, offs+1):
-                return True
-            
-        for itm in self.list:
-            i = itm.apply(buffer, offs-1)
-            if i:
-                buffer.offset += i
-                return True
-        
-        # advance to next entry if not handled by any Rule   
-        if self is buffer.bucket:
-            buffer.offset += 1
-            return True
-           
-        return False
-        
-
-class AnyBucket(RuleBucket):
-    """Variation of RuleBucket for evaluating all child components of a buffer entry."""
-    
-    def process(self, buffer, offs=0):
-        offs -= 2
-        c = buffer.current(offs)
-        for c in c.get_children():
-            while buffer.entries[buffer.offset + offs] is not c:
-                offs += 1
-                
-            if super().process(buffer, offs):
-                return True
-            offs += 1
-                      
-        return False
+        b._list.append(rule)    
 
     
 class NoEditException(Exception):
@@ -193,42 +211,79 @@ class NoEditException(Exception):
     
     def __init__(self, msg="No-Edit"):
         super().__init__(msg)
+        
+class RuleProcessingException(Exception):
+    def __init__(self, err, buffer, rule, start, end):
+        super().__init__("RuleProcessingException: '"+rule.name + \
+                        "' near " + _default_string(start).strip())
+        
+        self.err = err
+        self.buffer = buffer
+        self.rule = rule
+        self.start = start
+        self.end = end
+        
+    def printStack(self):
+        if isinstance(self.err, RuleProcessingException):
+            self.err.printStack()
+            
+        print(self.message + "\n")
+    
+    @property
+    def message(self):
+        
+        st = self.__str__() + \
+            (" /.../\n" + _default_string(self.end).strip() if self.start is not self.end else "") + \
+            " at chars " +str(self.start.offs) + \
+            " to " + str(self.end.pos)
+        
+        if not isinstance(self.err, RuleProcessingException):            
+            st += ";\n"+str(self.err)
+            
+        return st
+        
 
             
 class CodeBuffer():
-    """CodeBuffer provides a list for accumulating translated strings.
+    """CodeBuffer maintains a linear index of DOM components that will be transpiled to
+    a list of strings.
     
-    It also maintains a linear index of DOM components.  The buffer is
-    responsible for advancing the index pointer as transpiling progresses.  In
-    addition, it provides various methods for evaluating and manipulating the
-    DOM.
+    The 'source' argument may be a javascript source code string or a CodeEntry instance.
+    The 'rules' argument is a RuleManager instance.
+    The buffer is responsible for maintaining an index pointer as transpiling progresses.
+    In addition, it provides various methods for evaluating and manipulating the DOM. The
+    buffer is the primary tool used by CodeRule objects to examine and append transpiled code.
     """
-    def __init__(self, rootEntry, bucket):
-        rootEntry._pack()
+    def __init__(self, source, rules):
+        
+        if not isinstance(source, CodeEntry):
+            source = CodeFactory(str(source), rules._keywords).get_code()
+            
+        source._pack()
         self.buf = []
         self.offset = 0
         self.entries = []
-        self.bucket = bucket
+        self.rules = rules
         self.heading = None
         self.import_map = None
         self.pb = None # parent buffer (if any)
-        self.par_offs = 0
+        self.par_offs = 0 # starting offset for a slice
         self.head_offs = 0 # header insert position
         self.inobject = False # if buffer is inside an object type
         self.inset = 0
         importing = False
         # self.comments = comments # preserve comments in code
         
-        if isinstance(rootEntry, Container):
+        if isinstance(source, Container):
             self.heading = HeadingBuffer(self)
             self.import_map = ImportMap()
             
-            if (rootEntry.stack and 
-                isinstance(rootEntry.stack[0], Comment) and 
-                rootEntry.stack[0].noEdit()):
+            if (source.stack and 
+                isinstance(source.stack[0], Comment) and 
+                source.stack[0].noEdit()):
                 raise NoEditException()
                 
-            for e in rootEntry.entries():
+            for e in source.entries():
                 if not isinstance(e, Comment):
                     self.entries.append(e)
                     
@@ -245,19 +300,16 @@ class CodeBuffer():
         
     def transpile(self):
         """Fully processes the un-translated components and returns the result as a list of strings."""
-        
-    #    try:
+
         while self.offset < self.size:
-            self.bucket.process(self)
-    #    except Exception as err:
-    #        print("trap Exception: "+ str(err))
-      
+            self.rules.process(self)
+
         return self.buf
     
     def get_slice(self, bgn, end):
         """creates an new instance of this buffer with a slice of indexed components."""
         
-        cb = CodeBuffer(EMPTY, self.bucket)
+        cb = CodeBuffer(EMPTY, self.rules)
         if bgn < end:
             cb.entries = self.entries[bgn:end]
             cb.size = end - bgn
@@ -269,6 +321,8 @@ class CodeBuffer():
         cb.par_offs = bgn
         cb.inobject = self.inobject
         return cb
+    
+    # def get_super_buffer(self, start, end=None):
         
     def get_sub_buffer(self, start, end=None):
         """Creates a buffer from a subset of descendant components.
@@ -302,12 +356,14 @@ class CodeBuffer():
         return self.append_buffer(sb)   
 
     def append_buffer(self, cb):
-        """Adds a buffer to the end of this buffer and returns the number of components added ."""
+        """Transpiles the specified CodeBuffer and adds the result to the end of this buffer.
+        
+        Returns the number of components added from the input buffer."""
         
         if not cb.entries:
             return 0
         
-        # PYTHON BUG: self.buf.extend(cb.convert()) did not extend first time through
+        # PYTHON BUG: self.buf.extend(cb.transpile()) did not extend first time through
         # maybe 'extend' times-out if function does not return immediately?
         cb.transpile()
         self.buf.extend(cb.transpile())
@@ -341,9 +397,11 @@ class CodeBuffer():
         
         return self.current(-1)
     
-    def indent(self):
-        """Returns a string of space characters representing the current tab inset."""
-        
+    def indent(self, offset=0):
+        """Returns a string of space characters representing the current tab inset + offset."""
+        if offset:
+            return "\t".expandtabs(max(self.inset + offset, 0) * 4)
+         
         return self.inset and "\t".expandtabs(self.inset*4) or ""
     
     def new_line(self, tabs=0):
@@ -358,7 +416,7 @@ class CodeBuffer():
         self.buf.append("\n" + self.indent())
     
     def space(self):
-        """Appends a single space character to the buffer."""
+        """Appends a single space character to the buffer if there is not already a space."""
         
         if self.buf and self.buf[len(self.buf)-1].isspace():
             return
@@ -377,7 +435,7 @@ class CodeBuffer():
             self.buf[ln] = self.buf[ln].rstrip()
     
     def insert_code(self, code):
-        """Inserts a line of code after the last 'new_line' token. 
+        """Inserts a line of text after the last 'new_line' token. 
         
         Returns False if there is no line token in this buffer; True otherwise.
         """
@@ -414,17 +472,48 @@ class CodeBuffer():
                         self._get_ins_name(cnt))
             cnt -= 1
             
-        return self.pb and self.pb._get_insert_point() or (self, 0, 0, "0")       
+        return self.pb and self.pb._get_insert_point() or (self, 0, 0, "0")  
+    
+    def insert_prefix(self, token, altmap={}):
+        """Inserts a prefix string into the buffer before the current CodeEntry.
+        
+        This method contains heuristics to determine if the current entry is part of a hierarchical 
+        path (i.e. "part.info"). In such case, the 'token' argument is placed before the path. 
+        'altmap' is used to supply alternate namespace mappings such as {'this': 'self'} (optional).        
+        """
+        offs = len(self.buf)
+        e = self.current()
+        
+        while e.is_nested() and offs > -1:
+            offs -= 1
+            e = e.par
+            if isinstance(e, End): # give up if extends a function or expression (not a variable)
+                return False
+            
+            nm = e.name or str(e)
+            
+            # search backward through string buffer to begin    
+            while offs > -1:
+                if self.buf[offs] == altmap.get(nm, nm):
+                    break
+                offs -= 1
+        
+        if offs != -1:
+            self.buf.insert(offs, token)
+            return True
+                    
+        return False
+    
     
     def insert_function(self, code):
-        """Inserts a function into the buffer and returns the function name.
+        """Inserts a js function into the buffer and returns the function name.
         
-        The function code should not have a name or type prefix.
+        The function code should not have a name or type prefix and must by written in javascript.
         """
         ins = self._get_insert_point()
         fname = "_func_"+ins[3]
-        e = CodeFactory("function "+fname+code, self.bucket.keywords).get_code()
-        cb = CodeBuffer(e, self.bucket)
+        e = CodeFactory("function "+fname+code, self.rules._keywords).get_code()
+        cb = CodeBuffer(e, self.rules)
         cb.pb = self
         cb.inset = ins[2]
         # cb.new_line()
@@ -435,7 +524,9 @@ class CodeBuffer():
         cnt = ins[1]
         ins[0].buf = cnt and b[:cnt] + cb.buf + b[cnt-1:] or cb.buf + b
                         
-        return fname  
+        return fname
+    
+
     
     def insert_import_statement(self, code):
         """Inserts a javascript import statement and registers its attributes."""
@@ -447,8 +538,9 @@ class CodeBuffer():
         if not code.rstrip().endswith(";"):
             code += ";"
             
-        ea = CodeFactory(code, self.bucket.keywords).get_code().entries()
+        ea = CodeFactory(code, self.rules._keywords).get_code().entries()
         sb = self.get_slice(0, 0)
+        sb.inset = 0
         sb.entries.extend(ea)
         sb.size = len(ea)
         
@@ -477,7 +569,8 @@ class CodeBuffer():
         """Marks the next insert position for header code."""
         # Note: This function should only be called by CodeRules that handle 'KW_import' or other header entries
         
-        self.head_offs = len(self.buf)-1
+        self.head_offs = len(self.buf)-1        
+        
            
 
 class HeadingBuffer():
@@ -595,6 +688,10 @@ class CodeRule():
         the total number of CodeEntries that were evaluated. If no entries are
         evaluated, the method returns 0. The CodeBuffer's pointer will be
         advanced by the number returned.
+        
+        buffer = the CodeBuffer being evaluated
+        offset = the index offset of the last matching entry of the rules signature. 
+            Calling buffer.current(offset) returns the last entry.
         """
         return 1
 
@@ -642,11 +739,7 @@ def to_dom_file(filein, fileout=None):
     If 'fileout' is not specified, the default is the same as the input file
     with a '.dom' suffix.
     """
-    
-    if isinstance(Path().absolute(), WindowsPath):
-        filein =  Path(filein.replace("/", "\\"))
-        if fileout:
-            fileout = Path(str(Path().absolute())+fileout.replace("/", "\\")).resolve()  
+    filein = Path().absolute().joinpath(filein).resolve()
             
     if not fileout:
         fileout = filein.with_suffix(".dom") 
@@ -675,22 +768,16 @@ def to_dom_string(text):
     
     return "".join(buf)
 
+
+def format_code(sourcecode, rules="jsconvert.pyrules"):
+    """Returns a translated version of the input javascript source code string.
     
-def to_src_string(text, rules="jsconvert.pyrules"):    
-    """Translates javascript source code using the optional rules module.
-    
-    If a rules module is not specified, the default rules will convert to
-    Python.
+    The optional 'rules' argument may be a RuleManager instance or the name of a rules module. 
+    If not specified, the default rules will convert to Python.    
     """
-    
-    try:
-        rm = RuleManager(rules)
-        return rm.transpile(text)
-    
-    finally:  
-        pass  
-    
-    return "failed"
+        
+    rm = rules if isinstance(rules, RuleManager) else RuleManager(str(rules))
+    return "".join(CodeBuffer(sourcecode, rm).transpile())
 
 
 def convert(filein, fileout=None, rules="jsconvert.pyrules", dom=False):
@@ -704,20 +791,22 @@ def convert(filein, fileout=None, rules="jsconvert.pyrules", dom=False):
 
     filein = Path().absolute().joinpath(filein).resolve()
     ext = _get_ext(rules)
+    outx = ext.get("output")
     
     if not fileout:
-        fileout = (filein.is_dir() and filein) or filein.with_suffix(ext.get("output"))
+        fileout = (filein.is_dir() and filein) or filein.with_suffix(outx)
     else:
         fileout = Path().absolute().joinpath(fileout).resolve()
         
     files = _loadFiles(filein, ext.get("input"))
     if not filein.is_dir():
         filein = filein.parent
-        
+    
+    
     for f in files:
         if fileout.is_dir():
             rel = f.relative_to(filein)
-            fo = fileout.joinpath(rel).resolve().with_suffix(ext.get("output"))
+            fo = fileout.joinpath(rel).resolve().with_suffix(outx)
         else:
             fo = fileout
         
@@ -728,10 +817,23 @@ def convert(filein, fileout=None, rules="jsconvert.pyrules", dom=False):
             if not fo.parent.exists():
                 fo.parent.mkdir(parents=True, exist_ok=True)
                 
+            if fo.exists():
+                with open(str(fo), "r") as fin:
+                    try:
+                        while True:
+                            line = fin.readline().strip()
+                            if not line.startswith("#"):
+                                break
+                            if "no-edit" in line[1:].split(" "):
+                                raise NoEditException()
+                            
+                    except EOFError:
+                        pass
+                    
             print("importing: "+str(f)) 
             with open(str(f), "r") as fin:
                 data = fin.read()
-
+                    
             if dom:
                 print("compiling...")
                 ds = to_dom_string(data)
@@ -739,29 +841,66 @@ def convert(filein, fileout=None, rules="jsconvert.pyrules", dom=False):
                 with open(str(fo.with_suffix(ext.get("dom"))), "w") as rout:
                     rout.write(ds)
                     
+                    
             print("exporting: "+str(fo))    
-            src = to_src_string(data, rules)
+            src = format_code(data, rules)
                 
             with open(str(fo), "w") as fout:
                 fout.write(src)
                  
             print("export complete: ")
         except NoEditException:
-            print("export not allowed: "+str(fo))
+            print("editing not allowed: "+str(fo))
+            
+        except RuleProcessingException as pe:
+            pe.printStack()
                
         except Exception as err:
             print("error: "+str(f)+" Exception: "+ str(err))
+    
+    fs = _loadDir(fileout, fileout.is_dir())
+    print("updating "+str(len(fs))+" 'init' files...")
+    
+    for dr in fs:
+        fa = []
+        for f in dr.iterdir():
+            if not f.is_dir() and f.suffix == outx and not f.name.startswith("_"):
+                fa.append('"'+f.stem+'",')
+       
+        ns = "__all__ = ["+"".join(fa).rstrip(",")+"]" if fa else ""
+        txt = ns
+        inif = dr.joinpath("__init__.py").resolve()
         
+        if inif.exists():       
+            with open(str(inif), "r") as fin:
+                txt = fin.read()
+                p1 = txt.find("__all__")
+                p2 = txt.find("]", p1+1)
+                if p1 != -1 and p2 != -1:
+                    if p2 < len(txt)-1:
+                        ns += txt[p2+1:]
+                    txt = txt[:p1] + ns
+                else:
+                    txt += "\n"+ns
+        
+        with open(str(inif), "w") as fout:
+            fout.write(txt)              
+    
+    print("conversion complete")
+       
     
 def list_rules(ruleset, buf=None):
     """Utility that will recursively list all CodeRule sub-class within a module."""
     
     if buf is None:
         buf = []
-    rm = import_module(ruleset)
+        
+    rm = import_module(ruleset, "jsconvert")
+    # ignor = rm.IGNORE_RULES if hasattr(rm, "IGNORE_RULES") else []
+    
     if hasattr(rm, "__path__"):
         for m in rm.__all__:
-            if not m.startswith("_"):
+            if not m.startswith("_"): # filter out __init__ or special files
                 list_rules(ruleset+"."+m, buf)
     else:
         for m in rm.__all__:
