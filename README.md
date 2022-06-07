@@ -15,7 +15,7 @@ A good Transpiler must do more than simply convert syntax. This is why JSConvert
 
 # How to use
 
-To convert Javascript to Python, use one of two functions in the transpilier module: convert() or to_src_string(). The convert() function accepts a path argument to a ".js" file or to a directory containing ".js" files. The to_src_string() function, as the name implies, will directly transpile JS to Python and output the result as a string.
+To convert Javascript to Python, use one of two functions in the transpilier module: convert() or format_code(). The convert() function accepts a path argument to a ".js" file or to a directory containing ".js" files. The format_code() function, as the name implies, will directly transpile JS to Python and output the result as a string.
 
 **Example 1:**
 
@@ -37,14 +37,14 @@ By default, a transpilied output *.py file with the same name and directory as t
 ```py
 import jsconvert.transpiler as trans
 
-print(trans.to_src_string("var someJSvar = 'some value';"))
+print(trans.format_code("var someJSvar = 'some value';"))
 ```
 
-*Optional* to_src_string () keyword argument:
+*Optional* format_code () keyword argument:
 - rules = name of rule module used for transpiling. Default is "jsconvert.pyrules"
 
 # How to extend
-JSConvert currently includes two reference modules: “jsconvert.jsrules” and “jsconvert.pyrules”. As their names imply, jsrules are used to convert JS to JS while pyrules convert JS to Python3. A rule module can be specified by the “rules” keyword argument passed into either the convert() or to_src_string() functions as described above. 
+JSConvert currently includes two reference modules: “jsconvert.jsrules” and “jsconvert.pyrules”. As their names imply, jsrules are used to convert JS to JS while pyrules convert JS to Python3. A rule module can be specified by the “rules” keyword argument passed into either the convert() or format_code() functions as described above. 
 
 Each rule module contains a set of classes that extend “jsconvert.transpiler.CodeRule”. Developers that wish to modify source output can do so by modifying rule classes, adding rules, or changing rule precedence. In addition, developers can create their own rule modules to transpile JS to other languages or versions. For details and examples, see API documentation.
 
