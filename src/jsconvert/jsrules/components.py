@@ -152,7 +152,7 @@ class OpenStatementBlock(CodeRule):
         b.new_line(1)
 
         while sb.offset < sb.size:
-            sb.bucket.process(sb)
+            sb.rules.process(sb)
         
         b.add(("".join(sb.buf)).strip())
         ofs = sb.size + 2
@@ -304,7 +304,7 @@ class CaseStm(CodeRule):
         sb = b.get_sub_buffer(b.current())
         
         while sb.offset < sb.size:
-            sb.bucket.process(sb)
+            sb.rules.process(sb)
         
         b.trim()
         b.new_line()       
