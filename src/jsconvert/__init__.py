@@ -1,2 +1,2 @@
 
-__all__ = ["comp","jstest","lang","pytest","test","transpiler"]
+__all__ = ["comp", "lang", "transpiler"]
