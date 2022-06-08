@@ -83,7 +83,7 @@ Each rule module contains a set of classes that extend “jsconvert.transpiler.C
 
 # What's next?
 
-Here are some key areas that need further development:
+**Here are some key areas that need further development:**
 
 1. A simple user interface<br>
 Having a UI to select and preview files would be a nice addition.<br><br>
@@ -97,7 +97,7 @@ Introspection of variables to determine primitive type is not supported.<br><br>
 4. Improved language support<br>
 The default behavior of JSConvert when transpiling is to pass-through code features it does not support. This means that they will be included in the output file but may look more like their original source than the target source.<br><br>
 
-Some key features in the pyrules module that still need poly-fills include:
+**Some key features in the pyrules module that still need poly-fills include:**
 
 1. “for” loops<br>
 In most cases, Python “for” loops do not easily translate from javascript.<br><br>
