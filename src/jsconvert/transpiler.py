@@ -790,13 +790,23 @@ def convert(filein, fileout=None, rules="jsconvert.pyrules", dom=False):
     """
 
     filein = Path().absolute().joinpath(filein).resolve()
+    if not filein.exists():
+        raise IOError("Input File:'"+str(filein)+"' does not exist.")
+    
     ext = _get_ext(rules)
     outx = ext.get("output")
+    isdir = filein.is_dir()
     
     if not fileout:
-        fileout = (filein.is_dir() and filein) or filein.with_suffix(outx)
+        fileout = (isdir and filein) or filein.with_suffix(outx)
+        
     else:
         fileout = Path().absolute().joinpath(fileout).resolve()
+        if isdir and not fileout.is_dir():
+            fileout = fileout.parent
+            
+    if not (fileout if fileout.is_dir() else fileout.parent).exists():
+        raise IOError("Output File:'"+str(filein)+"' does not exist.")
         
     files = _loadFiles(filein, ext.get("input"))
     if not filein.is_dir():
@@ -858,34 +868,35 @@ def convert(filein, fileout=None, rules="jsconvert.pyrules", dom=False):
         except Exception as err:
             print("error: "+str(f)+" Exception: "+ str(err))
     
-    fs = _loadDir(fileout, fileout.is_dir())
-    print("updating "+str(len(fs))+" 'init' files...")
-    
-    for dr in fs:
-        fa = []
-        for f in dr.iterdir():
-            if not f.is_dir() and f.suffix == outx and not f.name.startswith("_"):
-                fa.append('"'+f.stem+'",')
-       
-        ns = "__all__ = ["+"".join(fa).rstrip(",")+"]" if fa else ""
-        txt = ns
-        inif = dr.joinpath("__init__.py").resolve()
+    if isdir:
+        fs = _loadDir(fileout, fileout.is_dir())
+        print("updating "+str(len(fs))+" 'init' files...")
         
-        if inif.exists():       
-            with open(str(inif), "r") as fin:
-                txt = fin.read()
-                p1 = txt.find("__all__")
-                p2 = txt.find("]", p1+1)
-                if p1 != -1 and p2 != -1:
-                    if p2 < len(txt)-1:
-                        ns += txt[p2+1:]
-                    txt = txt[:p1] + ns
-                else:
-                    txt += "\n"+ns
-        
-        with open(str(inif), "w") as fout:
-            fout.write(txt)              
-    
+        for dr in fs:
+            fa = []
+            for f in dr.iterdir():
+                if not f.is_dir() and f.suffix == outx and not f.name.startswith("_"):
+                    fa.append('"'+f.stem+'",')
+           
+            ns = "__all__ = ["+"".join(fa).rstrip(",")+"]" if fa else ""
+            txt = ns
+            inif = dr.joinpath("__init__.py").resolve()
+            
+            if inif.exists():       
+                with open(str(inif), "r") as fin:
+                    txt = fin.read()
+                    p1 = txt.find("__all__")
+                    p2 = txt.find("]", p1+1)
+                    if p1 != -1 and p2 != -1:
+                        if p2 < len(txt)-1:
+                            ns += txt[p2+1:]
+                        txt = txt[:p1] + ns
+                    else:
+                        txt += "\n"+ns
+            
+            with open(str(inif), "w") as fout:
+                fout.write(txt)              
+
     print("conversion complete")
        
     

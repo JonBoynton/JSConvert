@@ -15,7 +15,39 @@ A good Transpiler must do more than simply convert syntax. This is why JSConvert
 
 # How to use
 
-To convert Javascript to Python, use one of two functions in the transpilier module: convert() or format_code(). The convert() function accepts a path argument to a ".js" file or to a directory containing ".js" files. The format_code() function, as the name implies, will directly transpile JS to Python and output the result as a string.
+JSConvert tools can be accessed from a command line interface (CLI) or by calling functions directly in the jsconvert.transpiler module. To use the CLI, open your computers command prompt and navigate to the directory holding the jsconvert module. Next, assuming that Python is installed, enter `python -m jsconvert` after the prompt:
+
+```
+C:\Users\me\myapps>python -m jsconvert
+```
+
+Note that the `-m` is used to tell Python to load the jsconvert folder as the main module. Afterward, the interface will prompt you for the file, or files, to be converted. The input accepts a path to a ".js" file or to a directory containing ".js" files. Next, you will be prompted for optional configuration details which can be skipped by hitting 'ENTER'. If an output file is not specified, jsconvert will output to the same directory as the input file but with a different file extension (i.e. \*.py).
+
+**On Windows, it looks like this...**
+
+```
+_________________________________________________
+Welcome to JSConvert - CLI  v1.0.1
+
+Author: Jon L. Boynton
+Copyright 2022 Jon L. Boynton
+Licensed under the Apache License, Version 2.0
+_________________________________________________
+
+Enter a JS file or directory:
+C:\Users\me\myapps\example.js
+Change output directory? (Y/N):
+Change conversion rules? (Y/N):
+Create DOM Files? (Y/N):y
+importing: C:\Users\me\myapps\example.js
+compiling...
+exporting: C:\Users\me\myapps\example.py
+export complete:
+conversion complete
+Continue? (Y/N):
+```
+
+If you would like build your own implementation of JSConvert, use one of two functions in the jsconvert.transpilier module: convert() or format_code(). The convert() function accepts a file path while the format_code() function directly transpiles JS code; outputing the result as a string.
 
 **Example 1:**
 
@@ -25,7 +57,7 @@ import jsconvert.transpiler as trans
 trans.convert("C:/myUserPath/some_file.js")
 ```
 
-By default, a transpilied output *.py file with the same name and directory as the input *.js file(s) will be created. If a directory path is specified, the convert function will traverse all sub-directories and include every *.js  file.
+By default, a transpilied output \*.py file will be created with the same name and directory as the input \*.js file(s). If a directory path is specified, the convert function will traverse all sub-directories and include every *.js  file.
 
 *Optional* convert() keyword arguments:
 - fileout = the output file path, 
@@ -44,9 +76,10 @@ print(trans.format_code("var someJSvar = 'some value';"))
 - rules = name of rule module used for transpiling. Default is "jsconvert.pyrules"
 
 # How to extend
-JSConvert currently includes two reference modules: “jsconvert.jsrules” and “jsconvert.pyrules”. As their names imply, jsrules are used to convert JS to JS while pyrules convert JS to Python3. A rule module can be specified by the “rules” keyword argument passed into either the convert() or format_code() functions as described above. 
 
-Each rule module contains a set of classes that extend “jsconvert.transpiler.CodeRule”. Developers that wish to modify source output can do so by modifying rule classes, adding rules, or changing rule precedence. In addition, developers can create their own rule modules to transpile JS to other languages or versions. For details and examples, see API documentation.
+JSConvert currently includes two reference modules: `jsconvert.jsrules` and `jsconvert.pyrules`. As their names imply, jsrules are used to convert JS to JS while pyrules convert JS to Python3. A rule module can be specified by the “rules” keyword argument passed into either the convert() or format_code() functions as described above. 
+
+Each rule module contains a set of classes that extend “jsconvert.transpiler.CodeRule”. Developers that wish to modify source output can do so by modifying rule classes, adding rules, or changing rule precedence. In addition, developers can create their own rule modules to transpile JS to other languages or versions. For details and examples, see source code documentation.
 
 # What's next?
 
@@ -64,22 +97,22 @@ Introspection of variables to determine primitive type is not supported.<br><br>
 4. Improved language support<br>
 The default behavior of JSConvert when transpiling is to pass-through code features it does not support. This means that they will be included in the output file but may look more like their original source than the target source.<br><br>
 
-Some features in the pyrules module that still need poly-fills include:
+Some key features in the pyrules module that still need poly-fills include:
 
 1. “for” loops<br>
-Python “for” loops use an iterator and range model that does not easily translate from javascript.<br><br>
+In most cases, Python “for” loops do not easily translate from javascript.<br><br>
 
-2. “do while” loops<br>
-There does not seem to be a pythonic analog to “do”<br><br>
+2. “do...while” loops<br>
+Python does not seem to support `do...while` loops so a poly-fill is used to bridge the gap. However, use of `continue` statements within the loop may not work as intended.<br><br>
 
 3. Promises<br>
 Lambda functions are supported in pyrules but the Promise Object might be handled better by using Python’s ‘async’ and ‘await’ features.<br><br>
 
-4. byte[] arrays in JS<br>
-  Could be handled directly in python where identified by a rule.<br><br>
+4. arrays in JS<br>
+Some array like features are supported such as refactoring `Uin8Array` to `bytearray`. However, better general support for javascript arrays would be helpful.<br><br>
 
 **Conclusion:**<br>
-> This is by no means an exhaustive list. However, it's a start. Thank you for your interest in this project. I sincerely hope that it is useful to you.<br><br><br>
+>This is by no means an exhaustive list. However, it's a start. Thank you for your interest in this project. I sincerely hope that it is useful to you.<br><br><br>
 
 # License
 This project is licensed under the terms of [Apache License Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)

@@ -51,15 +51,15 @@ if __name__ == '__main__':
             fileout = None
             rules = "jsconvert.pyrules"
             
-            msg = input("Output to same directory? (Y/N):")
+            msg = input("Change output file? (Y/N):")
             
-            if not _yes(msg):
+            if _yes(msg):
                 msg = input("Enter a Python output directory:\n")
                 fileout = str(Path().absolute().joinpath(msg).resolve())
                 
-            msg = input("Convert JS with 'jsconvert.pyrules'? (Y/N):")
+            msg = input("Change conversion rules? (Y/N):")
             
-            if not _yes(msg):
+            if _yes(msg):
                 rules = input("Enter a rule module:\n")
                 
             msg = input("Create DOM Files? (Y/N):")
