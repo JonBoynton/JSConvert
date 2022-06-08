@@ -49,7 +49,7 @@ def _loadFiles(dir_, ext=".js", files=None):
         for f in dir_.iterdir():
             if f.suffix == ext and f.stem != "index":
                 files.append(f)
-            elif f.is_dir():
+            elif f.is_dir() and not f.name.startswith("_"):
                 _loadFiles(f, ext, files)
                 
     elif dir_.suffix == ext and dir_.stem != "index":
@@ -70,7 +70,7 @@ def _loadDir(dir_, recurse=False, files=None):
         dir_ = dir_.parent
         
     for f in dir_.iterdir():
-        if f.is_dir():
+        if f.is_dir() and not f.name.startswith("_"):
             files.append(f)
             if recurse:
                 _loadDir(f, True, files)
@@ -792,6 +792,9 @@ def convert(filein, fileout=None, rules="jsconvert.pyrules", dom=False):
     filein = Path().absolute().joinpath(filein).resolve()
     if not filein.exists():
         raise IOError("Input File:'"+str(filein)+"' does not exist.")
+    
+    if str(filein).startswith(str(Path().absolute())):
+        raise IOError("Internal Error:'"+str(filein)+"' file not allowed.")
     
     ext = _get_ext(rules)
     outx = ext.get("output")
