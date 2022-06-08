@@ -47,7 +47,7 @@ conversion complete
 Continue? (Y/N):
 ```
 
-If you would like build your own implementation of JSConvert, use one of two functions in the jsconvert.transpilier module: convert() or format_code(). The convert() function accepts a file path while the format_code() function directly transpiles JS code; outputing the result as a string.
+If you would like to build your own JSConvert application, this is easiest using one of two functions in the jsconvert.transpilier module. The functions are convert() and format_code(). The convert() function accepts a file path while the format_code() function directly transpiles JS code; outputing the result as a string.
 
 **Example 1:**
 
